@@ -1,0 +1,21 @@
+{
+  "site": {
+    "name": "拾光札记",
+    "slogan": "把学过的、读过的、想明白的，写成看得见的帖子。",
+    "author": "朱昌松",
+    "bio": "软件工程在读，正在记录 AI、代码与日常思考。",
+    "location": "武汉",
+    "avatar": "/assets/avatar.png",
+    "hero": "/assets/hero.png",
+    "email": "hello@example.com",
+    "github": "https://github.com/",
+    "links": [
+      { "label": "GitHub", "url": "https://github.com/" },
+      { "label": "邮件", "url": "mailto:hello@example.com" }
+    ]
+  },
+  "note_dirs": ["./notes"],
+  "host": "127.0.0.1",
+  "port": 8000,
+  "data_file": "data/state.json"
+}

@@ -1,0 +1,7 @@
+__pycache__/
+data/state.json
+server.log
+server.err
+.edge-*/
+.DS_Store
+Thumbs.db

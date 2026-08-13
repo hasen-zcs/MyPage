@@ -1,0 +1,7 @@
+__pycache__/
+data/state.json
+preview/
+.git/
+.edge-*/
+server.log
+server.err
