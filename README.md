@@ -109,6 +109,8 @@ summary: 一句话摘要
 
 如果没有写 `title`，会使用第一个一级标题；没有写 `summary`，会自动截取正文开头。
 
+图片可以直接使用 Obsidian 写法 `![[图片.png]]`，也可以使用标准 Markdown 写法 `![](img/图片.png)`。图片放在笔记同目录、`img/` 或 `attachments/` 子目录中即可，网页会自动解析并显示。
+
 ## 删除帖子
 
 删除 `notes/` 中对应的 `.md` 文件，刷新页面后帖子就会自动消失。如果配置了多个笔记目录，从对应的目录中删除即可。
@@ -133,3 +135,4 @@ draft: true
 - `GET /api/posts/{slug}`：帖子详情与已渲染 HTML。
 - `POST /api/posts/{slug}/like`：点赞或取消点赞。
 - `GET/POST /api/posts/{slug}/comments`：读取或发布评论。
+- `DELETE /api/posts/{slug}/comments/{id}`：删除评论。

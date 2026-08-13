@@ -975,7 +975,7 @@ svg {
 
 .comment-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 5px;
@@ -988,6 +988,37 @@ svg {
 .comment-head span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.comment-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-left: auto;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.comment-delete:hover {
+  border-color: #e6a79b;
+  color: var(--accent);
+}
+
+.comment-delete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.comment-delete svg {
+  width: 14px;
+  height: 14px;
 }
 
 .comment-main p {

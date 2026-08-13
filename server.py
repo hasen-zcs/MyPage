@@ -7,10 +7,11 @@ import os
 import re
 import secrets
 import threading
+import traceback
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import markdown
 import yaml
@@ -87,6 +88,8 @@ def parse_date(value, fallback_path: Path) -> str:
 
 def plain_text(raw: str) -> str:
     text = re.sub(r"```.*?```", " ", raw, flags=re.S)
+    text = re.sub(r"!\[\[[^\]]*\]\]", " ", text)
+    text = re.sub(r"\[\[([^\]]+)\]\]", r"\1", text)
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
     text = re.sub(r"<[^>]+>", " ", text)
@@ -101,21 +104,99 @@ def count_words(text: str) -> int:
     return max(cjk + latin, 1)
 
 
-def preprocess_obsidian(raw: str) -> str:
-    def embed(match: re.Match) -> str:
-        name = match.group(1).split("|")[0].strip()
+def note_asset_url(root_index: int, rel_path: Path) -> str:
+    rel = rel_path.as_posix()
+    return f"/note-asset?root={root_index}&path={quote(rel)}"
+
+
+def resolve_image_source(
+    target: str,
+    md_path: Path,
+    root: Path,
+    root_index: int,
+) -> str:
+    target = target.strip().strip('"').strip("'")
+    if not target or target.startswith(("http://", "https://", "data:")):
+        return ""
+
+    name = Path(target).name or target
+    candidates: list[Path] = []
+    target_path = Path(target)
+    if not target_path.is_absolute():
+        candidates.extend(
+            [
+                md_path.parent / target_path,
+                md_path.parent / "img" / target_path,
+                root / target_path,
+            ]
+        )
+    for base in [
+        md_path.parent,
+        md_path.parent / "img",
+        md_path.parent / "attachments",
+        root,
+        root / "img",
+        root / "attachments",
+    ]:
+        candidates.append(base / name)
+
+    resolved_root = root.resolve()
+    for candidate in candidates:
+        try:
+            file_path = candidate.resolve()
+            file_path.relative_to(resolved_root)
+            if file_path.is_file():
+                return note_asset_url(root_index, file_path.relative_to(resolved_root))
+        except (ValueError, OSError):
+            continue
+
+    try:
+        matches = [p for p in root.rglob(name) if p.is_file()]
+        if matches:
+            return note_asset_url(root_index, matches[0].relative_to(resolved_root))
+    except (ValueError, OSError):
+        pass
+    return ""
+
+
+def preprocess_markdown(
+    raw: str,
+    md_path: Path,
+    root: Path,
+    root_index: int,
+) -> str:
+    def obsidian_embed(match: re.Match) -> str:
+        parts = match.group(1).split("|")
+        name = parts[0].strip()
+        src = resolve_image_source(name, md_path, root, root_index)
+        if src:
+            width_style = ""
+            if len(parts) > 1 and parts[1].strip().isdigit():
+                width_style = f' style="width:{parts[1].strip()}px;max-width:100%"'
+            return (
+                f'<img src="{src}" alt="{html.escape(name)}" loading="lazy"{width_style} />'
+            )
         return f'<span class="obsidian-embed">图片：{html.escape(name)}</span>'
 
-    def link(match: re.Match) -> str:
+    def obsidian_link(match: re.Match) -> str:
         return html.escape(match.group(1).split("|")[0].strip())
 
-    raw = re.sub(r"!\[\[([^\]]+)\]\]", embed, raw)
-    raw = re.sub(r"\[\[([^\]]+)\]\]", link, raw)
+    def markdown_image(match: re.Match) -> str:
+        alt = match.group(1)
+        target = match.group(2)
+        src = resolve_image_source(target, md_path, root, root_index)
+        if src:
+            return f'<img src="{src}" alt="{html.escape(alt)}" loading="lazy" />'
+        return match.group(0)
+
+    raw = re.sub(r"!\[\[([^\]]+)\]\]", obsidian_embed, raw)
+    raw = re.sub(r"\[\[([^\]]+)\]\]", obsidian_link, raw)
+    raw = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+[\"'][^\"']*[\"'])?\)", markdown_image, raw)
     return raw
 
 
-def render_markdown(raw: str) -> str:
-    md_text = preprocess_obsidian(raw)
+def render_markdown(raw: str, md_path: Path, root: Path, root_index: int) -> str:
+    md_text = preprocess_markdown(raw, md_path, root, root_index)
     return markdown.markdown(
         md_text,
         extensions=[
@@ -173,7 +254,7 @@ class PostStore:
 
     def _fingerprint(self) -> str:
         parts = []
-        for root in resolve_note_dirs():
+        for root_index, root in enumerate(resolve_note_dirs()):
             try:
                 parts.append(str(root.stat().st_mtime_ns))
             except Exception:
@@ -187,7 +268,7 @@ class PostStore:
 
     def _rebuild(self) -> None:
         posts: dict[str, dict] = {}
-        for root in resolve_note_dirs():
+        for root_index, root in enumerate(resolve_note_dirs()):
             for path in sorted(root.rglob("*.md")):
                 if path.name.startswith("_"):
                     continue
@@ -229,7 +310,7 @@ class PostStore:
                     "words": max(words, 1),
                     "reading_time": max(1, round(words / 260)),
                     "color": PALETTES.get(color_key, PALETTES["green"]),
-                    "content_html": render_markdown(body),
+                    "content_html": render_markdown(body, path, root, root_index),
                     "content_text": plain_text(body),
                     "source": str(path),
                 }
@@ -337,6 +418,18 @@ class PostStore:
             self._save_state()
         return comment
 
+    def delete_comment(self, slug: str, comment_id: str) -> bool:
+        if not self.get(slug):
+            return False
+        with self._lock:
+            comments = self._comments(slug)
+            for index, comment in enumerate(comments):
+                if comment.get("id") == comment_id:
+                    comments.pop(index)
+                    self._save_state()
+                    return True
+        return False
+
 
 STORE = PostStore()
 
@@ -396,9 +489,52 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
         return True
 
+    def _serve_note_asset(self, parsed) -> None:
+        query = parse_qs(parsed.query)
+        try:
+            root_index = int((query.get("root") or ["-1"])[0])
+        except ValueError:
+            self._send_error(400, "invalid root")
+            return
+
+        roots = resolve_note_dirs()
+        if not 0 <= root_index < len(roots):
+            self._send_error(400, "invalid root")
+            return
+
+        rel_path = (query.get("path") or [""])[0].strip()
+        if not rel_path:
+            self._send_error(400, "invalid path")
+            return
+
+        root = roots[root_index].resolve()
+        try:
+            file_path = (root / rel_path).resolve()
+            file_path.relative_to(root)
+        except (ValueError, OSError):
+            self._send_error(403, "forbidden")
+            return
+
+        if not file_path.is_file():
+            self._send_error(404, "asset not found")
+            return
+
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        data = file_path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _handle_get(self) -> None:
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+
+        if path == "/note-asset":
+            self._serve_note_asset(parsed)
+            return
 
         if path == "/api/meta":
             self._send_json(
@@ -495,12 +631,27 @@ class Handler(BaseHTTPRequestHandler):
                 return
         self._send_error(404, "not found")
 
+    def _handle_delete(self) -> None:
+        path = unquote(urlparse(self.path).path)
+        if path.startswith("/api/posts/"):
+            suffix = path[len("/api/posts/"):]
+            parts = suffix.split("/")
+            if len(parts) == 3 and parts[1] == "comments":
+                slug, comment_id = parts[0], parts[2]
+                if STORE.delete_comment(slug, comment_id):
+                    self._send_json({"ok": True})
+                else:
+                    self._send_error(404, "comment not found")
+                return
+        self._send_error(404, "not found")
+
     def do_GET(self) -> None:
         try:
             self._handle_get()
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception:
+            traceback.print_exc()
             self._send_error(500, "internal server error")
 
     def do_POST(self) -> None:
@@ -509,6 +660,16 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
         except Exception:
+            traceback.print_exc()
+            self._send_error(500, "internal server error")
+
+    def do_DELETE(self) -> None:
+        try:
+            self._handle_delete()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception:
+            traceback.print_exc()
             self._send_error(500, "internal server error")
 
 
