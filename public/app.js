@@ -80,7 +80,7 @@ function renderHero(stats) {
       <div class="hero-inner">
         <div class="hero-copy">
           <span class="hero-kicker">${escapeHtml(site.slogan || "个人笔记主页")}</span>
-          <h1>${escapeHtml(site.name || "拾光札记")}</h1>
+          <h1>${escapeHtml(site.name || "hasen的个人博客")}</h1>
           <p>${escapeHtml(site.bio || "")}</p>
           <div class="hero-stats">
             <div class="hero-stat"><strong>${countText}</strong><span>篇笔记</span></div>
@@ -257,8 +257,8 @@ function bindHomeEvents() {
 function renderHome() {
   const app = document.getElementById("app");
   app.innerHTML = renderHero(state.stats) + renderFeed();
-  document.getElementById("brandName").textContent = state.site.name || "拾光札记";
-  document.getElementById("footerName").textContent = state.site.name || "拾光札记";
+  document.getElementById("brandName").textContent = state.site.name || "hasen的个人博客";
+  document.getElementById("footerName").textContent = state.site.name || "hasen的个人博客";
   bindHomeEvents();
 }
 
@@ -399,7 +399,7 @@ async function showPost(slug) {
   app.innerHTML = `<section class="layout"><div class="empty-state">${ICONS.file}<h3>正在打开笔记</h3></div></section>`;
   try {
     const data = await api(`/api/posts/${encodeURIComponent(slug)}?visitor_id=${encodeURIComponent(state.visitorId)}`);
-    document.title = `${data.title} · ${state.site.name || "拾光札记"}`;
+    document.title = `${data.title} · ${state.site.name || "hasen的个人博客"}`;
     app.innerHTML = renderPost(data);
     bindPostEvents(data);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -413,7 +413,7 @@ function route() {
   if (hash.startsWith("#/post/")) {
     showPost(decodeURIComponent(hash.slice("#/post/".length)));
   } else {
-    document.title = `${state.site.name || "拾光札记"} · 个人主页`;
+    document.title = `${state.site.name || "hasen的个人博客"} · 个人主页`;
     renderHome();
   }
 }
