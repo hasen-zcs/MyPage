@@ -21,7 +21,7 @@
   "admin": {
     "enabled": true,
     "dir": "./notes",
-    "password": "zhuchangsong2",
+    "password": "hasen-zcs",
     "session_ttl_hours": 12,
     "git_commit": true
   }

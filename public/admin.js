@@ -114,7 +114,7 @@ function renderList() {
       </div>
       <div class="list-toolbar">
         <label class="search-box">
-          ${ICONS.search}
+          <span class="search-icon">${ICONS.search}</span>
           <input id="listSearch" type="search" placeholder="按标题 / 路径 / 标签筛选" autocomplete="off" />
         </label>
       </div>
