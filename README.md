@@ -129,10 +129,61 @@ draft: true
 
 修改 `config.json` 里的站点名称、作者、简介、头像和链接。`note_dirs` 支持多个目录，也可以填写绝对路径，把其他位置的笔记目录直接纳入主页。
 
+## 后台管理
+
+项目自带一个网页后台，可以**直接在浏览器里写笔记、编辑、删除**，不用再手动拷贝文件。访问 `http://127.0.0.1:8000/admin`。
+
+### 启用
+
+后台默认未启用，需要先设置管理密码（环境变量优先，也可以在 `config.json` 的 `admin.password` 里配置，但不建议提交到 git）：
+
+```powershell
+$env:ADMIN_PASSWORD="你的密码"
+python server.py
+```
+
+打开 `/admin`，输入密码即可进入。密码错误 5 次会锁定 10 分钟。
+
+### 功能
+
+- **写笔记**：网页里直接写 Markdown，右侧实时预览（渲染效果与前台完全一致），支持标题/日期/标签/摘要/主题色/草稿等 front matter 字段；
+- **导入 md**：编辑器里点「上传 .md」导入本地 Markdown 文件，自动解析 front matter 填入表单，确认后保存；
+- **插图**：点「插图」上传图片，自动保存到笔记目录的 `img/` 子目录，并在光标处插入 `![[图片名.png]]`；
+- **管理**：按目录列出全部笔记，支持搜索、编辑、删除；删除时会顺带清理 `data/state.json` 里对应的点赞评论数据；
+- **自动备份**：每次保存/删除/传图自动执行 `git add -A && git commit`（可在 `config.json` 的 `admin.git_commit` 关闭），笔记有版本历史可回滚。
+
+`config.json` 里 `admin` 相关配置：
+
+```json
+"admin": {
+  "enabled": true,
+  "dir": "./notes",
+  "password": "",
+  "session_ttl_hours": 12,
+  "git_commit": true
+}
+```
+
+> 注意：后台接口没有公网防护以外的额外保护，公网部署时务必配合 HTTPS，或仅限局域网使用。
+
 ## 接口
 
+- `GET /api/meta`：站点信息与统计。
 - `GET /api/posts`：帖子列表，支持 `q`、`tag`、`visitor_id`。
 - `GET /api/posts/{slug}`：帖子详情与已渲染 HTML。
 - `POST /api/posts/{slug}/like`：点赞或取消点赞。
 - `GET/POST /api/posts/{slug}/comments`：读取或发布评论。
 - `DELETE /api/posts/{slug}/comments/{id}`：删除评论。
+
+后台接口（需要 `X-Admin-Token` 请求头，登录后获得）：
+
+- `POST /api/admin/login`：登录，`{"password": "..."}` 返回 token。
+- `POST /api/admin/logout`：注销。
+- `GET /api/admin/posts`：后台笔记列表。
+- `GET /api/admin/posts/{path}`：读取某篇笔记的原始 Markdown（`path` 为相对路径，如 `手撕Transformer/AddNorm.md`）。
+- `POST /api/admin/posts`：新建笔记。
+- `PUT /api/admin/posts/{path}`：更新笔记（可移动目录/改名）。
+- `DELETE /api/admin/posts/{path}`：删除笔记。
+- `POST /api/admin/preview`：渲染 Markdown 预览，`{"body": "...", "dir": "..."}`。
+- `POST /api/admin/upload/md`：multipart 上传 `.md` 文件（字段名 `file`），只解析不落盘，返回 `{files: [{filename, meta, body, raw}]}`。
+- `POST /api/admin/upload/image`：multipart 上传图片（字段名 `file`，可带 `dir` 指定笔记目录），保存到该目录 `img/` 下，返回 `{name, embed, url}`。

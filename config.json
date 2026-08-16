@@ -17,5 +17,12 @@
   "note_dirs": ["./notes"],
   "host": "127.0.0.1",
   "port": 8000,
-  "data_file": "data/state.json"
+  "data_file": "data/state.json",
+  "admin": {
+    "enabled": true,
+    "dir": "./notes",
+    "password": "zhuchangsong2",
+    "session_ttl_hours": 12,
+    "git_commit": true
+  }
 }
